@@ -1,0 +1,18 @@
+{
+    "products": [
+        {
+            "id": 1,
+            "name": "tshirt",
+            "image_url": "/static/tshirt.jpg",
+            "sales_month1": 40,
+            "sales_month2": 50
+        },
+        {
+            "id": 2,
+            "name": "shirt",
+            "image_url": "/static/shirt.png",
+            "sales_month1": 60,
+            "sales_month2": 40
+        }
+    ]
+}
