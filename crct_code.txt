@@ -1,0 +1,989 @@
+from flask_sqlalchemy import SQLAlchemy
+from werkzeug.security import generate_password_hash, check_password_hash
+
+db = SQLAlchemy()
+
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(50), unique=True, nullable=False)
+    password = db.Column(db.String(255), nullable=False)
+
+    def set_password(self, password):
+        self.password = generate_password_hash(password)
+
+    def check_password(self, password):
+        return check_password_hash(self.password, password)
+
+
+models.py
+
+
+
+from flask import Flask, render_template, request, redirect, url_for, flash, session
+from flask_sqlalchemy import SQLAlchemy
+from werkzeug.security import generate_password_hash, check_password_hash
+
+# Initialize Flask application
+app = Flask(__name__)
+app.secret_key = 'your_secret_key'  # Replace with a secure secret key
+
+# Configuration for SQLAlchemy
+app.config['SQLALCHEMY_DATABASE_URI'] = 'mssql+pyodbc://@DESKTOP-DI486IP/trend?driver=ODBC+Driver+17+for+SQL+Server'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# Initialize SQLAlchemy
+db = SQLAlchemy(app)
+
+# Define User model
+class Users(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(50), unique=True, nullable=False)
+    password = db.Column(db.String(255), nullable=False)
+
+    def set_password(self, password):
+        self.password = generate_password_hash(password)
+
+    def check_password(self, password):
+        return check_password_hash(self.password, password)
+
+# Routes
+
+@app.route('/')
+def index():
+    return redirect(url_for('login'))
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+        user = Users.query.filter_by(username=username).first()
+        if user and user.check_password(password):
+            session['username'] = user.username
+            flash('Login successful!', 'success')
+            return redirect(url_for('dashboard'))
+        else:
+            flash('Invalid username or password', 'error')
+    return render_template('login.html')
+
+@app.route('/signup', methods=['GET', 'POST'])
+def signup():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+        
+        # Check if username already exists
+        existing_user = Users.query.filter_by(username=username).first()
+        if existing_user:
+            flash('Username already exists. Please choose a different username.', 'error')
+        else:
+            # Create new user
+            new_user = Users(username=username)
+            new_user.set_password(password)
+            db.session.add(new_user)
+            db.session.commit()
+            flash('Signup successful! Please log in.', 'success')
+            return redirect(url_for('login'))
+    return render_template('signup.html')
+
+@app.route('/dashboard')
+def dashboard():
+    if 'username' in session:
+        return render_template('dashboard.html', username=session['username'])
+    return redirect(url_for('login'))
+
+@app.route('/logout')
+def logout():
+    session.pop('username', None)
+    return redirect(url_for('login'))
+
+if __name__ == '__main__':
+    with app.app_context():
+        db.create_all()
+    app.run(debug=True)
+
+
+
+app.py
+
+
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" integrity="sha384-JcKb8q3iqJ61gNV9KGb8thSsNjpSL0n8PARn9HuZOnIxN0hoP+VmmDGMN5t9UJ0Z" crossorigin="anonymous">
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f8f9fa;
+        }
+        .card {
+            width: 400px;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .btn-login {
+            width: 100%;
+        }
+        .signup-link {
+            text-align: center;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h2 class="text-center mb-4">Login</h2>
+        <form method="POST">
+            <div class="form-group">
+                <label for="username">Username:</label>
+                <input type="text" id="username" name="username" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label for="password">Password:</label>
+                <input type="password" id="password" name="password" class="form-control" required>
+            </div>
+            <button type="submit" class="btn btn-primary btn-login">Login</button>
+        </form>
+        <div class="signup-link">
+            <p>Not registered yet? <a href="{{ url_for('signup') }}">Signup here</a></p>
+        </div>
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                <div class="mt-3">
+                    <ul class="list-unstyled">
+                        {% for message in messages %}
+                            <li class="alert alert-danger">{{ message }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
+        {% endwith %}
+    </div>
+</body>
+</html>
+
+
+login.html
+
+
+
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Signup</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" integrity="sha384-JcKb8q3iqJ61gNV9KGb8thSsNjpSL0n8PARn9HuZOnIxN0hoP+VmmDGMN5t9UJ0Z" crossorigin="anonymous">
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f8f9fa;
+        }
+        .card {
+            width: 400px;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .btn-signup {
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h2 class="text-center mb-4">Signup</h2>
+        <form method="POST">
+            <div class="form-group">
+                <label for="username">Username:</label>
+                <input type="text" id="username" name="username" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label for="password">Password:</label>
+                <input type="password" id="password" name="password" class="form-control" required>
+            </div>
+            <button type="submit" class="btn btn-primary btn-signup">Signup</button>
+        </form>
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                <div class="mt-3">
+                    <ul class="list-unstyled">
+                        {% for message in messages %}
+                            <li class="alert alert-danger">{{ message }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
+        {% endwith %}
+    </div>
+</body>
+</html>
+
+
+
+
+signup.html
+
+
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard</title>
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" integrity="sha384-JcKb8q3iqJ61gNV9KGb8thSsNjpSL0n8PARn9HuZOnIxN0hoP+VmmDGMN5t9UJ0Z" crossorigin="anonymous">
+    <style>
+        body {
+            padding: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Welcome, {{ username }}</h2>
+        <hr>
+        <h3>Upload XML File</h3>
+        <form method="POST" enctype="multipart/form-data">
+            <div class="form-group">
+                <label for="file">Select XML file:</label>
+                <input type="file" class="form-control-file" id="file" name="file" accept=".xml" required>
+            </div>
+            <button type="submit" class="btn btn-primary">Upload</button>
+        </form>
+        <br>
+        <a href="{{ url_for('logout') }}" class="btn btn-danger">Logout</a>
+    </div>
+</body>
+</html>
+
+
+
+dashboard.html
+
+
+
+TILL THE LOGIN SIGNUP CRCT
+
+
+
+from flask import Flask, render_template, request, redirect, url_for, flash, session, send_from_directory
+from flask_sqlalchemy import SQLAlchemy
+from werkzeug.security import generate_password_hash, check_password_hash
+import os
+import xml.etree.ElementTree as ET
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# Initialize Flask application
+app = Flask(__name__)
+app.secret_key = 'your_secret_key'  # Replace with a secure secret key
+
+# Configuration for SQLAlchemy
+app.config['SQLALCHEMY_DATABASE_URI'] = 'mssql+pyodbc://@DESKTOP-DI486IP/trend?driver=ODBC+Driver+17+for+SQL+Server'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# Initialize SQLAlchemy
+db = SQLAlchemy(app)
+
+# Define User model
+class Users(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(50), unique=True, nullable=False)
+    password = db.Column(db.String(255), nullable=False)
+
+    def set_password(self, password):
+        self.password = generate_password_hash(password)
+
+    def check_password(self, password):
+        return check_password_hash(self.password, password)
+
+# Routes
+
+@app.route('/')
+def index():
+    return redirect(url_for('login'))
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+        user = Users.query.filter_by(username=username).first()
+        if user and user.check_password(password):
+            session['username'] = user.username
+            flash('Login successful!', 'success')
+            return redirect(url_for('dashboard'))
+        else:
+            flash('Invalid username or password', 'error')
+    return render_template('login.html')
+
+@app.route('/signup', methods=['GET', 'POST'])
+def signup():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+        
+        # Check if username already exists
+        existing_user = Users.query.filter_by(username=username).first()
+        if existing_user:
+            flash('Username already exists. Please choose a different username.', 'error')
+        else:
+            # Create new user
+            new_user = Users(username=username)
+            new_user.set_password(password)
+            db.session.add(new_user)
+            db.session.commit()
+            flash('Signup successful! Please log in.', 'success')
+            return redirect(url_for('login'))
+    return render_template('signup.html')
+
+@app.route('/dashboard', methods=['GET', 'POST'])
+def dashboard():
+    if 'username' in session:
+        if request.method == 'POST':
+            # Handle file upload
+            file = request.files['file']
+            if file and file.filename.endswith('.xml'):
+                file_path = os.path.join('uploads', file.filename)
+                file.save(file_path)
+                return redirect(url_for('analysis', filename=file.filename))
+            else:
+                flash('Invalid file format. Please upload an XML file.', 'error')
+        return render_template('dashboard.html', username=session['username'])
+    return redirect(url_for('login'))
+
+@app.route('/analysis/<filename>')
+def analysis(filename):
+    file_path = os.path.join('uploads', filename)
+    
+    # Parse the XML file
+    tree = ET.parse(file_path)
+    root = tree.getroot()
+
+    # Extract data from XML
+    data = []
+    for product in root.findall('product'):
+        name = product.find('name').text
+        sales_month1 = int(product.find('sales_month1').text)
+        sales_month2 = int(product.find('sales_month2').text)
+        data.append({'name': name, 'sales_month1': sales_month1, 'sales_month2': sales_month2})
+
+    # Convert data to DataFrame
+    df = pd.DataFrame(data)
+
+    # Calculate growth rate
+    df['growth_rate'] = (df['sales_month2'] - df['sales_month1']) / df['sales_month1']
+
+    # Project future sales (simple linear projection)
+    df['projected_sales'] = df['sales_month2'] * (1 + df['growth_rate'])**12
+
+    # Plotting (simple example)
+    fig, ax = plt.subplots()
+    for _, row in df.iterrows():
+        months = ['Month 1', 'Month 2', 'Projected (1 year)']
+        sales = [row['sales_month1'], row['sales_month2'], row['projected_sales']]
+        ax.plot(months, sales, marker='o', label=row['name'])
+
+    plt.xlabel('Month')
+    plt.ylabel('Sales')
+    plt.title('Sales and Projected Sales')
+    plt.legend()
+    
+    # Ensure 'static' directory exists
+    static_dir = os.path.join(app.root_path, 'static')
+    if not os.path.exists(static_dir):
+        os.makedirs(static_dir)
+    
+    plot_filename = 'plot.png'
+    plot_path = os.path.join(static_dir, plot_filename)
+    plt.savefig(plot_path)
+
+    return render_template('analysis.html', plot_url=url_for('static', filename=plot_filename))
+
+@app.route('/logout')
+def logout():
+    session.pop('username', None)
+    return redirect(url_for('login'))
+
+if __name__ == '__main__':
+    if not os.path.exists('uploads'):
+        os.makedirs('uploads')
+    with app.app_context():
+        db.create_all()
+    app.run(debug=True)
+
+app.py
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" integrity="sha384-JcKb8q3iqJ61gNV9KGb8thSsNjpSL0n8PARn9HuZOnIxN0hoP+VmmDGMN5t9UJ0Z" crossorigin="anonymous">
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f8f9fa;
+        }
+        .card {
+            width: 400px;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .btn-login {
+            width: 100%;
+        }
+        .signup-link {
+            text-align: center;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h2 class="text-center mb-4">Login</h2>
+        <form method="POST">
+            <div class="form-group">
+                <label for="username">Username:</label>
+                <input type="text" id="username" name="username" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label for="password">Password:</label>
+                <input type="password" id="password" name="password" class="form-control" required>
+            </div>
+            <button type="submit" class="btn btn-primary btn-login">Login</button>
+        </form>
+        <div class="signup-link">
+            <p>Not registered yet? <a href="{{ url_for('signup') }}">Signup here</a></p>
+        </div>
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                <div class="mt-3">
+                    <ul class="list-unstyled">
+                        {% for message in messages %}
+                            <li class="alert alert-danger">{{ message }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
+        {% endwith %}
+    </div>
+</body>
+</html>
+
+
+login.html
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Signup</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" integrity="sha384-JcKb8q3iqJ61gNV9KGb8thSsNjpSL0n8PARn9HuZOnIxN0hoP+VmmDGMN5t9UJ0Z" crossorigin="anonymous">
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f8f9fa;
+        }
+        .card {
+            width: 400px;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .btn-signup {
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h2 class="text-center mb-4">Signup</h2>
+        <form method="POST">
+            <div class="form-group">
+                <label for="username">Username:</label>
+                <input type="text" id="username" name="username" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label for="password">Password:</label>
+                <input type="password" id="password" name="password" class="form-control" required>
+            </div>
+            <button type="submit" class="btn btn-primary btn-signup">Signup</button>
+        </form>
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                <div class="mt-3">
+                    <ul class="list-unstyled">
+                        {% for message in messages %}
+                            <li class="alert alert-danger">{{ message }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
+        {% endwith %}
+    </div>
+</body>
+</html>
+
+signup.html
+
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" integrity="sha384-JcKb8q3iqJ61gNV9KGb8thSsNjpSL0n8PARn9HuZOnIxN0hoP+VmmDGMN5t9UJ0Z" crossorigin="anonymous">
+    <style>
+        body {
+            padding: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Welcome, {{ username }}</h2>
+        <hr>
+        <h3>Upload XML File</h3>
+        <form method="POST" action="{{ url_for('dashboard') }}" enctype="multipart/form-data">
+            <div class="form-group">
+                <label for="file">Select XML file:</label>
+                <input type="file" class="form-control-file" id="file" name="file" accept=".xml" required>
+            </div>
+            <button type="submit" class="btn btn-primary">Upload</button>
+        </form>
+        <br>
+        <a href="{{ url_for('logout') }}" class="btn btn-danger">Logout</a>
+    </div>
+</body>
+</html>
+
+
+dashboard.html
+
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analysis</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" integrity="sha384-JcKb8q3iqJ61gNV9KGb8thSsNjpSL0n8PARn9HuZOnIxN0hoP+VmmDGMN5t9UJ0Z" crossorigin="anonymous">
+</head>
+<body>
+    <div class="container">
+        <h2>Sales Analysis</h2>
+        <img src="{{ plot_url }}" alt="Sales Analysis Graph" class="img-fluid">
+        <br>
+        <a href="{{ url_for('dashboard') }}" class="btn btn-primary mt-3">Back to Dashboard</a>
+        <a href="{{ url_for('logout') }}" class="btn btn-danger mt-3">Logout</a>
+    </div>
+</body>
+</html>
+
+
+analysis.html
+
+
+
+#########################################################################################################################################################
+
+
+
+
+from flask import Flask, render_template, request, redirect, url_for, flash, session, send_from_directory, jsonify
+from flask_sqlalchemy import SQLAlchemy
+from werkzeug.security import generate_password_hash, check_password_hash
+import os
+import json
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# Initialize Flask application
+app = Flask(__name__)
+app.secret_key = 'your_secret_key'  # Replace with a secure secret key
+
+# Configuration for SQLAlchemy
+app.config['SQLALCHEMY_DATABASE_URI'] = 'mssql+pyodbc://@DESKTOP-DI486IP/trend?driver=ODBC+Driver+17+for+SQL+Server'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# Initialize SQLAlchemy
+db = SQLAlchemy(app)
+
+# Define User model
+class Users(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(50), unique=True, nullable=False)
+    password = db.Column(db.String(255), nullable=False)
+
+    def set_password(self, password):
+        self.password = generate_password_hash(password)
+
+    def check_password(self, password):
+        return check_password_hash(self.password, password)
+
+# Routes
+
+@app.route('/')
+def index():
+    return redirect(url_for('login'))
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+        user = Users.query.filter_by(username=username).first()
+        if user and user.check_password(password):
+            session['username'] = user.username
+            flash('Login successful!', 'success')
+            return redirect(url_for('dashboard'))
+        else:
+            flash('Invalid username or password', 'error')
+    return render_template('login.html')
+
+@app.route('/signup', methods=['GET', 'POST'])
+def signup():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+        
+        # Check if username already exists
+        existing_user = Users.query.filter_by(username=username).first()
+        if existing_user:
+            flash('Username already exists. Please choose a different username.', 'error')
+        else:
+            # Create new user
+            new_user = Users(username=username)
+            new_user.set_password(password)
+            db.session.add(new_user)
+            db.session.commit()
+            flash('Signup successful! Please log in.', 'success')
+            return redirect(url_for('login'))
+    return render_template('signup.html')
+
+@app.route('/products')
+def products():
+    # Return contents of products.json file
+    with open(os.path.join(app.root_path, 'static', 'products.json')) as f:
+        products_data = json.load(f)
+    return jsonify(products_data)
+
+@app.route('/dashboard', methods=['GET', 'POST'])
+def dashboard():
+    if 'username' in session:
+        if request.method == 'POST':
+            # Handle file upload
+            file = request.files['file']
+            if file and file.filename.endswith('.json'):
+                file_path = os.path.join('uploads', file.filename)
+                file.save(file_path)
+                return redirect(url_for('analysis', filename=file.filename))
+            else:
+                flash('Invalid file format. Please upload a JSON file.', 'error')
+        return render_template('dashboard.html', username=session['username'])
+    return redirect(url_for('login'))
+
+@app.route('/analysis/<filename>')
+def analysis(filename):
+    file_path = os.path.join('uploads', filename)
+    
+    # Load data from JSON file
+    try:
+        with open(file_path) as f:
+            data = json.load(f)
+    except FileNotFoundError:
+        flash('File not found. Please upload a valid JSON file.', 'error')
+        return redirect(url_for('dashboard'))
+    except json.JSONDecodeError:
+        flash('Invalid JSON file. Please upload a valid JSON file.', 'error')
+        return redirect(url_for('dashboard'))
+
+    # Convert data to DataFrame
+    df = pd.DataFrame(data['products'])
+
+    # Calculate growth rate
+    df['growth_rate'] = (df['sales_month2'] - df['sales_month1']) / df['sales_month1']
+
+    # Project future sales (simple linear projection)
+    df['projected_sales'] = df['sales_month2'] * (1 + df['growth_rate'])**12
+
+    # Plotting (simple example)
+    fig, ax = plt.subplots()
+    for _, row in df.iterrows():
+        months = ['Month 1', 'Month 2', 'Projected (1 year)']
+        sales = [row['sales_month1'], row['sales_month2'], row['projected_sales']]
+        ax.plot(months, sales, marker='o', label=row['name'])
+
+    plt.xlabel('Month')
+    plt.ylabel('Sales')
+    plt.title('Sales and Projected Sales')
+    plt.legend()
+    
+    # Ensure 'static' directory exists
+    static_dir = os.path.join(app.root_path, 'static')
+    if not os.path.exists(static_dir):
+        os.makedirs(static_dir)
+    
+    plot_filename = 'plot.png'
+    plot_path = os.path.join(static_dir, plot_filename)
+    plt.savefig(plot_path)
+
+    return render_template('analysis.html', plot_url=url_for('static', filename=plot_filename))
+
+@app.route('/logout')
+def logout():
+    session.pop('username', None)
+    return redirect(url_for('login'))
+
+if __name__ == '__main__':
+    if not os.path.exists('uploads'):
+        os.makedirs('uploads')
+    with app.app_context():
+        db.create_all()
+    app.run(debug=True)
+
+app.py
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" integrity="sha384-JcKb8q3iqJ61gNV9KGb8thSsNjpSL0n8PARn9HuZOnIxN0hoP+VmmDGMN5t9UJ0Z" crossorigin="anonymous">
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f8f9fa;
+        }
+        .card {
+            width: 400px;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .btn-login {
+            width: 100%;
+        }
+        .signup-link {
+            text-align: center;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h2 class="text-center mb-4">Login</h2>
+        <form method="POST">
+            <div class="form-group">
+                <label for="username">Username:</label>
+                <input type="text" id="username" name="username" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label for="password">Password:</label>
+                <input type="password" id="password" name="password" class="form-control" required>
+            </div>
+            <button type="submit" class="btn btn-primary btn-login">Login</button>
+        </form>
+        <div class="signup-link">
+            <p>Not registered yet? <a href="{{ url_for('signup') }}">Signup here</a></p>
+        </div>
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                <div class="mt-3">
+                    <ul class="list-unstyled">
+                        {% for message in messages %}
+                            <li class="alert alert-danger">{{ message }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
+        {% endwith %}
+    </div>
+</body>
+</html>
+
+
+
+login.html
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Signup</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" integrity="sha384-JcKb8q3iqJ61gNV9KGb8thSsNjpSL0n8PARn9HuZOnIxN0hoP+VmmDGMN5t9UJ0Z" crossorigin="anonymous">
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f8f9fa;
+        }
+        .card {
+            width: 400px;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .btn-signup {
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h2 class="text-center mb-4">Signup</h2>
+        <form method="POST">
+            <div class="form-group">
+                <label for="username">Username:</label>
+                <input type="text" id="username" name="username" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label for="password">Password:</label>
+                <input type="password" id="password" name="password" class="form-control" required>
+            </div>
+            <button type="submit" class="btn btn-primary btn-signup">Signup</button>
+        </form>
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                <div class="mt-3">
+                    <ul class="list-unstyled">
+                        {% for message in messages %}
+                            <li class="alert alert-danger">{{ message }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
+        {% endwith %}
+    </div>
+</body>
+</html>
+
+signup.html
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analysis</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" integrity="sha384-JcKb8q3iqJ61gNV9KGb8thSsNjpSL0n8PARn9HuZOnIxN0hoP+VmmDGMN5t9UJ0Z" crossorigin="anonymous">
+</head>
+<body>
+    <div class="container">
+        <h2>Sales Analysis</h2>
+        <img src="{{ plot_url }}" alt="Sales Analysis Graph" class="img-fluid">
+        <br>
+        <a href="{{ url_for('dashboard') }}" class="btn btn-primary mt-3">Back to Dashboard</a>
+        <a href="{{ url_for('logout') }}" class="btn btn-danger mt-3">Logout</a>
+    </div>
+</body>
+</html>
+analysis.html
+
+
+{
+    "products": [
+        {
+            "id": 1,
+            "name": "tshirt",
+            "image_url": "/static/tshirt.jpg",
+            "sales_month1": 40,
+            "sales_month2": 50
+        },
+        {
+            "id": 2,
+            "name": "shirt",
+            "image_url": "/static/shirt.png",
+            "sales_month1": 60,
+            "sales_month2": 40
+        }
+    ]
+}
+
+products.json
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard</title>
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" integrity="sha384-JcKb8q3iqJ61gNV9KGb8thSsNjpSL0n8PARn9HuZOnIxN0hoP+VmmDGMN5t9UJ0Z" crossorigin="anonymous">
+    <style>
+        body {
+            padding: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Welcome, {{ username }}</h2>
+        <hr>
+        <h3>Upload JSON File</h3>
+        <form method="POST" enctype="multipart/form-data" action="{{ url_for('dashboard') }}">
+            <div class="form-group">
+                <label for="file">Select JSON file:</label>
+                <input type="file" class="form-control-file" id="file" name="file" accept=".json" required>
+            </div>
+            <button type="submit" class="btn btn-primary">Upload</button>
+        </form>
+        <br>
+        <a href="{{ url_for('logout') }}" class="btn btn-danger">Logout</a>
+    </div>
+</body>
+</html>
+
+
+dashboard.html
+
+
+
+
+
+
+
+
+
+
